@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
+// Get the backend URL from environment variable or use localhost as fallback
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:5000";
+
 function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -13,8 +16,14 @@ function App() {
   const [startTime, setStartTime] = useState(null); // Track the start time of the current session
 
   useEffect(() => {
-    // Initialize Socket.IO connection
-    socketRef.current = io("http://127.0.0.1:5000");
+    // Initialize Socket.IO connection with the backend URL
+    console.log("Connecting to backend at:", BACKEND_URL);
+    socketRef.current = io(BACKEND_URL, {
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
 
     // Socket event handlers
     socketRef.current.on("connect", () => {

@@ -20,6 +20,13 @@ function App() {
   const [distractedTime, setDistractedTime] = useState(0); // in seconds
   const [startTime, setStartTime] = useState(null); // Track the start time of the current session
 
+  // Format time to show seconds and milliseconds
+  const formatTime = (timeInSeconds) => {
+    const seconds = Math.floor(timeInSeconds);
+    const milliseconds = Math.floor((timeInSeconds - seconds) * 1000);
+    return `${seconds}.${milliseconds.toString().padStart(3, '0')}`;
+  };
+
   useEffect(() => {
     if (!BACKEND_URL) {
       console.error("No backend URL configured!");
@@ -60,21 +67,12 @@ function App() {
     socketRef.current.on("status", (data) => {
       const { status } = data;
       setStatus(status);
-      const currentTime = Date.now();
-
+      
       if (status === "Distracted") {
         setIsDistracted(true);
-        if (startTime) {
-          setDistractedTime((prevTime) => prevTime + (currentTime - startTime) / 1000);
-        }
       } else {
         setIsDistracted(false);
-        if (startTime) {
-          setFocusedTime((prevTime) => prevTime + (currentTime - startTime) / 1000);
-        }
       }
-
-      setStartTime(currentTime);
     });
 
     socketRef.current.on("error", (data) => {
@@ -129,6 +127,25 @@ function App() {
 
     return () => clearInterval(interval);
   }, [isTracking]);
+
+  // Add new effect for continuous timer updates
+  useEffect(() => {
+    if (!isTracking || !startTime) return;
+
+    const timerInterval = setInterval(() => {
+      const currentTime = Date.now();
+      const elapsedTime = (currentTime - startTime) / 1000;
+
+      if (isDistracted) {
+        setDistractedTime(prev => prev + elapsedTime);
+      } else {
+        setFocusedTime(prev => prev + elapsedTime);
+      }
+      setStartTime(currentTime);
+    }, 10); // Update every 10ms for smoother millisecond display
+
+    return () => clearInterval(timerInterval);
+  }, [isTracking, startTime, isDistracted]);
 
   const handleStart = () => {
     setFocusedTime(0);
@@ -188,11 +205,11 @@ function App() {
       <div className="mt-8 text-lg text-gray-700">
         <p className="mb-2">
           <span className="font-semibold">Focused Time:</span>{" "}
-          {focusedTime.toFixed(2)} seconds
+          {formatTime(focusedTime)} seconds
         </p>
         <p>
           <span className="font-semibold">Distracted Time:</span>{" "}
-          {distractedTime.toFixed(2)} seconds
+          {formatTime(distractedTime)} seconds
         </p>
       </div>
     </div>

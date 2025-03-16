@@ -3,6 +3,9 @@ import { io } from "socket.io-client";
 
 // Get the backend URL from environment variable or use localhost as fallback
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+const IS_DEVELOPMENT = import.meta.env.DEV;
+
+console.log("Environment:", IS_DEVELOPMENT ? "Development" : "Production");
 console.log("Environment variable VITE_BACKEND_URL:", import.meta.env.VITE_BACKEND_URL);
 console.log("Using backend URL:", BACKEND_URL);
 
@@ -32,8 +35,10 @@ function App() {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       path: '/socket.io/',
-      secure: true, // Enable secure WebSocket
-      rejectUnauthorized: false // Allow self-signed certificates
+      secure: true,
+      rejectUnauthorized: false,
+      forceNew: true,
+      timeout: 10000
     });
 
     // Socket event handlers

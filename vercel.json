@@ -3,12 +3,10 @@
     "builds": [
       {
         "src": "distraction-frontend/package.json",
-        "use": "@vercel/static-build",
-        "config": { "distDir": "dist" }
+        "use": "@vercel/next"
       }
     ],
-    "routes": [
-      { "src": "/(.*)", "dest": "/index.html" }
-    ]
+    "framework": "vite",
+    "rootDirectory": "distraction-frontend"
   }
   

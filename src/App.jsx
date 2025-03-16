@@ -22,12 +22,20 @@ function App() {
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+      reconnectionDelay: 1000,
+      path: '/socket.io/',
+      secure: true // Enable secure WebSocket
     });
 
     // Socket event handlers
     socketRef.current.on("connect", () => {
       console.log("Connected to WebSocket server");
+      setStatus("Connected to server");
+    });
+
+    socketRef.current.on("connect_error", (error) => {
+      console.error("Connection error:", error);
+      setStatus("Connection error");
     });
 
     socketRef.current.on("disconnect", () => {

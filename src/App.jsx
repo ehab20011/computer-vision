@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
 // Get the backend URL from environment variable or use localhost as fallback
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:5000";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+console.log("Environment variable VITE_BACKEND_URL:", import.meta.env.VITE_BACKEND_URL);
+console.log("Using backend URL:", BACKEND_URL);
 
 function App() {
   const videoRef = useRef(null);
@@ -16,6 +18,12 @@ function App() {
   const [startTime, setStartTime] = useState(null); // Track the start time of the current session
 
   useEffect(() => {
+    if (!BACKEND_URL) {
+      console.error("No backend URL configured!");
+      setStatus("Error: No backend URL configured");
+      return;
+    }
+
     // Initialize Socket.IO connection with the backend URL
     console.log("Connecting to backend at:", BACKEND_URL);
     socketRef.current = io(BACKEND_URL, {
@@ -24,7 +32,8 @@ function App() {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       path: '/socket.io/',
-      secure: true // Enable secure WebSocket
+      secure: true, // Enable secure WebSocket
+      rejectUnauthorized: false // Allow self-signed certificates
     });
 
     // Socket event handlers
@@ -35,7 +44,7 @@ function App() {
 
     socketRef.current.on("connect_error", (error) => {
       console.error("Connection error:", error);
-      setStatus("Connection error");
+      setStatus(`Connection error: ${error.message}`);
     });
 
     socketRef.current.on("disconnect", () => {

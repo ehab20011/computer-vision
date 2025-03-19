@@ -37,7 +37,7 @@ function App() {
     // Initialize Socket.IO connection with the backend URL
     console.log("Connecting to backend at:", BACKEND_URL);
     socketRef.current = io(BACKEND_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -49,7 +49,12 @@ function App() {
       withCredentials: true,
       autoConnect: true,
       upgrade: true,
-      rememberUpgrade: true
+      rememberUpgrade: true,
+      extraHeaders: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
     });
 
     // Socket event handlers

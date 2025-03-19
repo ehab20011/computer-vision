@@ -46,7 +46,10 @@ function App() {
       rejectUnauthorized: false,
       forceNew: true,
       timeout: 20000,
-      withCredentials: true
+      withCredentials: true,
+      autoConnect: true,
+      upgrade: true,
+      rememberUpgrade: true
     });
 
     // Socket event handlers

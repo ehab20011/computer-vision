@@ -37,7 +37,7 @@ function App() {
     // Initialize Socket.IO connection with the backend URL
     console.log("Connecting to backend at:", BACKEND_URL);
     socketRef.current = io(BACKEND_URL, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -45,7 +45,8 @@ function App() {
       secure: true,
       rejectUnauthorized: false,
       forceNew: true,
-      timeout: 10000
+      timeout: 20000,
+      withCredentials: true
     });
 
     // Socket event handlers
@@ -55,7 +56,12 @@ function App() {
     });
 
     socketRef.current.on("connect_error", (error) => {
-      console.error("Connection error:", error);
+      console.error("Connection error details:", {
+        message: error.message,
+        description: error.description,
+        type: error.type,
+        context: error.context
+      });
       setStatus(`Connection error: ${error.message}`);
     });
 

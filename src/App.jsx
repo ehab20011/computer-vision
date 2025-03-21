@@ -37,7 +37,7 @@ function App() {
     // Initialize Socket.IO connection with the backend URL
     console.log("Connecting to backend at:", BACKEND_URL);
     socketRef.current = io(BACKEND_URL, {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -45,17 +45,7 @@ function App() {
       secure: true,
       rejectUnauthorized: false,
       forceNew: true,
-      timeout: 20000,
-      withCredentials: true,
-      autoConnect: true,
-      upgrade: true,
-      rememberUpgrade: true,
-      extraHeaders: {
-        "Access-Control-Allow-Origin": "https://www.focuspoint.it.com",
-        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type,Authorization",
-        "Access-Control-Allow-Credentials": "true"
-      }
+      timeout: 10000
     });
 
     // Socket event handlers
@@ -65,12 +55,7 @@ function App() {
     });
 
     socketRef.current.on("connect_error", (error) => {
-      console.error("Connection error details:", {
-        message: error.message,
-        description: error.description,
-        type: error.type,
-        context: error.context
-      });
+      console.error("Connection error:", error);
       setStatus(`Connection error: ${error.message}`);
     });
 
@@ -79,7 +64,7 @@ function App() {
       setStatus("Disconnected from server");
     });
 
-    socketRef.current.on("status", (data) => {
+    socketRef.current.on("focus_status", (data) => {
       const { status } = data;
       setStatus(status);
       

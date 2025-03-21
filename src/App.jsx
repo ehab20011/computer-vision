@@ -42,7 +42,7 @@ function App() {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       path: '/socket.io/',
-      secure: true,
+      secure: BACKEND_URL.startsWith("https"),
       rejectUnauthorized: false,
       forceNew: true,
       timeout: 10000

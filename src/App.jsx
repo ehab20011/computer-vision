@@ -19,6 +19,8 @@ function App() {
   const [focusedTime, setFocusedTime] = useState(0); // in seconds
   const [distractedTime, setDistractedTime] = useState(0); // in seconds
   const [startTime, setStartTime] = useState(null); // Track the start time of the current session
+  const [isServerReady, setIsServerReady] = useState(false); // Launches the server on first load
+  const [videoReady, setVideoReady] = useState(false); //For the camera
 
   // Format time to show seconds and milliseconds
   const formatTime = (timeInSeconds) => {
@@ -80,7 +82,18 @@ function App() {
       setStatus("Error processing frame");
     });
 
-    // Access the webcam
+    // Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isServerReady) return;
+  
+    // Access the webcam AFTER server is ready
     navigator.mediaDevices
       .getUserMedia({ video: true })
       .then((stream) => {
@@ -92,17 +105,11 @@ function App() {
         console.error("Error accessing webcam:", err);
         setStatus("Error accessing webcam");
       });
-
-    // Cleanup on unmount
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
-  }, []);
+  }, [isServerReady]);
+  
 
   useEffect(() => {
-    if (!isTracking || !socketRef.current) {
+    if (!isTracking || !socketRef.current || !videoReady) {
       return;
     }
 
@@ -127,6 +134,30 @@ function App() {
 
     return () => clearInterval(interval);
   }, [isTracking]);
+
+  //Use Effect for server loading
+  useEffect(() => {
+    const launchServer = async () => {
+      try {
+        const res = await fetch("https://launch-ec2instance-production.up.railway.app/launch", {
+          method: "POST",
+        });
+        const data = await res.json();
+        console.log("Launch result:", data);
+  
+        if (data.status === "launched") {
+          console.log("✅ SSM initiated, waiting 3 seconds...");
+          setTimeout(() => setIsServerReady(true), 3000);
+        }
+      } catch (err) {
+        console.error("❌ Server failed to launch:", err);
+        // Optionally show a retry UI here
+      }
+    };
+  
+    launchServer();
+  }, []);
+  
 
   // Add new effect for continuous timer updates
   useEffect(() => {
@@ -160,59 +191,81 @@ function App() {
     setStatus("Click start to begin inferences");
   };
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <h1 className="text-4xl font-bold underline mb-6 text-gray-800">
-        Distraction Detection
-      </h1>
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        className="border-4 border-black rounded-lg shadow-lg max-w-2xl mb-6"
-      ></video>
-      <canvas ref={canvasRef} className="hidden"></canvas>
-      <div
-        className={`mt-4 text-2xl font-semibold py-2 px-6 rounded-md ${isDistracted
-          ? "bg-red-100 text-red-700 border-red-500"
-          : "bg-green-100 text-green-700 border-green-500"
-          } border shadow-md`}
-      >
-        {status}
-      </div>
-      <div className="flex space-x-4 mt-6">
-        <button
-          onClick={handleStart}
-          className={`px-6 py-2 text-lg font-medium text-white rounded-md transition ${isTracking
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-green-600 hover:bg-green-700"
-            }`}
-          disabled={isTracking}
-        >
-          Start
-        </button>
-        <button
-          onClick={handleStop}
-          className={`px-6 py-2 text-lg font-medium text-white rounded-md transition ${!isTracking
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-            }`}
-          disabled={!isTracking}
-        >
-          Stop
-        </button>
-      </div>
-      <div className="mt-8 text-lg text-gray-700">
-        <p className="mb-2">
-          <span className="font-semibold">Focused Time:</span>{" "}
-          {formatTime(focusedTime)} seconds
-        </p>
-        <p>
-          <span className="font-semibold">Distracted Time:</span>{" "}
-          {formatTime(distractedTime)} seconds
-        </p>
+  //Loading pop-up
+  const LoadingPopup = () => (
+    <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
+      <div className="flex space-x-6 items-center p-8 border rounded-lg shadow-xl">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">🚀 Server Loading</h2>
+          <button className="bg-blue-500 text-white px-4 py-2 rounded-lg animate-pulse">Loading...</button>
+        </div>
+        <div className="text-gray-700 max-w-sm">
+          <p>This app detects distractions in real-time using your webcam.</p>
+          <p>Please wait a few seconds while we spin up the backend infrastructure.</p>
+        </div>
       </div>
     </div>
+  );
+  
+  return (
+    <>
+      {!isServerReady && <LoadingPopup />}
+      {isServerReady && (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+          <h1 className="text-4xl font-bold underline mb-6 text-gray-800">
+            Distraction Detection
+          </h1>
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            onCanPlay={() => setVideoReady(true)}
+            className="border-4 border-black rounded-lg shadow-lg max-w-2xl mb-6"
+          ></video>
+          <canvas ref={canvasRef} className="hidden"></canvas>
+          <div
+            className={`mt-4 text-2xl font-semibold py-2 px-6 rounded-md ${isDistracted
+              ? "bg-red-100 text-red-700 border-red-500"
+              : "bg-green-100 text-green-700 border-green-500"
+              } border shadow-md`}
+          >
+            {status}
+          </div>
+          <div className="flex space-x-4 mt-6">
+            <button
+              onClick={handleStart}
+              className={`px-6 py-2 text-lg font-medium text-white rounded-md transition ${isTracking
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+                }`}
+              disabled={isTracking}
+            >
+              Start
+            </button>
+            <button
+              onClick={handleStop}
+              className={`px-6 py-2 text-lg font-medium text-white rounded-md transition ${!isTracking
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-700"
+                }`}
+              disabled={!isTracking}
+            >
+              Stop
+            </button>
+          </div>
+          <div className="mt-8 text-lg text-gray-700">
+            <p className="mb-2">
+              <span className="font-semibold">Focused Time:</span>{" "}
+              {formatTime(focusedTime)} seconds
+            </p>
+            <p>
+              <span className="font-semibold">Distracted Time:</span>{" "}
+              {formatTime(distractedTime)} seconds
+            </p>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

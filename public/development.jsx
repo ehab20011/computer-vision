@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+// Get the backend URL from environment variable or use localhost as fallback
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 const IS_DEVELOPMENT = import.meta.env.DEV;
 
 console.log("Environment:", IS_DEVELOPMENT ? "Development" : "Production");
+console.log("Environment variable VITE_BACKEND_URL:", import.meta.env.VITE_BACKEND_URL);
 console.log("Using backend URL:", BACKEND_URL);
 
 function App() {
@@ -14,17 +16,17 @@ function App() {
   const [status, setStatus] = useState("Click start to begin inferences");
   const [isDistracted, setIsDistracted] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
-  const [focusedTime, setFocusedTime] = useState(0);
-  const [distractedTime, setDistractedTime] = useState(0);
-  const [startTime, setStartTime] = useState(null);
-  const [isServerReady, setIsServerReady] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
+  const [focusedTime, setFocusedTime] = useState(0); // in seconds
+  const [distractedTime, setDistractedTime] = useState(0); // in seconds
+  const [startTime, setStartTime] = useState(null); // Track the start time of the current session
+  const [isServerReady, setIsServerReady] = useState(false); // Launches the server on first load
+  const [videoReady, setVideoReady] = useState(false); //For the camera
 
-  // Helper to format elapsed time
+  // Format time to show seconds and milliseconds
   const formatTime = (timeInSeconds) => {
     const seconds = Math.floor(timeInSeconds);
     const milliseconds = Math.floor((timeInSeconds - seconds) * 1000);
-    return `${seconds}.${milliseconds.toString().padStart(3, "0")}`;
+    return `${seconds}.${milliseconds.toString().padStart(3, '0')}`;
   };
 
   useEffect(() => {
@@ -34,19 +36,21 @@ function App() {
       return;
     }
 
-    // Initialize the Socket.IO connection
+    // Initialize Socket.IO connection with the backend URL
+    console.log("Connecting to backend at:", BACKEND_URL);
     socketRef.current = io(BACKEND_URL, {
-      transports: ["websocket"],
+      transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      path: "/socket.io/",
+      path: '/socket.io/',
       secure: BACKEND_URL.startsWith("https"),
       rejectUnauthorized: false,
       forceNew: true,
-      timeout: 10000,
+      timeout: 10000
     });
 
+    // Socket event handlers
     socketRef.current.on("connect", () => {
       console.log("Connected to WebSocket server");
       setStatus("Connected to server");
@@ -65,7 +69,12 @@ function App() {
     socketRef.current.on("focus_status", (data) => {
       const { status } = data;
       setStatus(status);
-      setIsDistracted(status === "Distracted");
+      
+      if (status === "Distracted") {
+        setIsDistracted(true);
+      } else {
+        setIsDistracted(false);
+      }
     });
 
     socketRef.current.on("error", (data) => {
@@ -81,19 +90,10 @@ function App() {
     };
   }, []);
 
-  // Simulate EC2 launch wait for 3 seconds (the popup will be exactly as production)
-  useEffect(() => {
-    console.log("Simulating backend launch wait (3 seconds)...");
-    const timer = setTimeout(() => {
-      setIsServerReady(true);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Access the webcam once the server is "ready"
   useEffect(() => {
     if (!isServerReady) return;
-
+  
+    // Access the webcam AFTER server is ready
     navigator.mediaDevices
       .getUserMedia({ video: true })
       .then((stream) => {
@@ -106,8 +106,8 @@ function App() {
         setStatus("Error accessing webcam");
       });
   }, [isServerReady]);
+  
 
-  // Send frames at intervals when tracking is enabled
   useEffect(() => {
     if (!isTracking || !socketRef.current || !videoReady) {
       return;
@@ -115,6 +115,7 @@ function App() {
 
     const interval = setInterval(() => {
       if (videoRef.current && canvasRef.current) {
+        // Draw the video frame onto the canvas
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
@@ -123,15 +124,42 @@ function App() {
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+        // Convert the canvas content to base64
         const frame = canvas.toDataURL("image/jpeg").split(",")[1];
+
+        // Send the frame through WebSocket
         socketRef.current.emit("frame", { frame });
       }
     }, 700);
 
     return () => clearInterval(interval);
-  }, [isTracking, videoReady]);
+  }, [isTracking]);
 
-  // Timer to update focused/distracted time continuously
+  //Use Effect for server loading
+  useEffect(() => {
+    const launchServer = async () => {
+      try {
+        const res = await fetch("https://launch-ec2instance-production.up.railway.app/launch", {
+          method: "POST",
+        });
+        const data = await res.json();
+        console.log("Launch result:", data);
+  
+        if (data.status === "launched") {
+          console.log("✅ SSM initiated, waiting 3 seconds...");
+          setTimeout(() => setIsServerReady(true), 3000);
+        }
+      } catch (err) {
+        console.error("❌ Server failed to launch:", err);
+        // Optionally show a retry UI here
+      }
+    };
+  
+    launchServer();
+  }, []);
+  
+
+  // Add new effect for continuous timer updates
   useEffect(() => {
     if (!isTracking || !startTime) return;
 
@@ -140,12 +168,12 @@ function App() {
       const elapsedTime = (currentTime - startTime) / 1000;
 
       if (isDistracted) {
-        setDistractedTime((prev) => prev + elapsedTime);
+        setDistractedTime(prev => prev + elapsedTime);
       } else {
-        setFocusedTime((prev) => prev + elapsedTime);
+        setFocusedTime(prev => prev + elapsedTime);
       }
       setStartTime(currentTime);
-    }, 10);
+    }, 10); // Update every 10ms for smoother millisecond display
 
     return () => clearInterval(timerInterval);
   }, [isTracking, startTime, isDistracted]);
@@ -163,15 +191,13 @@ function App() {
     setStatus("Click start to begin inferences");
   };
 
-  // Production loading popup (unchanged)
+  //Loading pop-up
   const LoadingPopup = () => (
     <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
       <div className="flex space-x-6 items-center p-8 border rounded-lg shadow-xl">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-2">🚀 Server Loading</h2>
-          <button className="bg-blue-500 text-white px-4 py-2 rounded-lg animate-pulse">
-            Loading...
-          </button>
+          <button className="bg-blue-500 text-white px-4 py-2 rounded-lg animate-pulse">Loading...</button>
         </div>
         <div className="text-gray-700 max-w-sm">
           <p>This app detects distractions in real-time using your webcam.</p>
@@ -180,14 +206,14 @@ function App() {
       </div>
     </div>
   );
-
+  
   return (
     <>
       {!isServerReady && <LoadingPopup />}
       {isServerReady && (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
           <h1 className="text-4xl font-bold underline mb-6 text-gray-800">
-            Distraction Detection (Local Testing)
+            Distraction Detection
           </h1>
           <video
             ref={videoRef}
@@ -198,33 +224,30 @@ function App() {
           ></video>
           <canvas ref={canvasRef} className="hidden"></canvas>
           <div
-            className={`mt-4 text-2xl font-semibold py-2 px-6 rounded-md border shadow-md ${
-              isDistracted
-                ? "bg-red-100 text-red-700 border-red-500"
-                : "bg-green-100 text-green-700 border-green-500"
-            }`}
+            className={`mt-4 text-2xl font-semibold py-2 px-6 rounded-md ${isDistracted
+              ? "bg-red-100 text-red-700 border-red-500"
+              : "bg-green-100 text-green-700 border-green-500"
+              } border shadow-md`}
           >
             {status}
           </div>
           <div className="flex space-x-4 mt-6">
             <button
               onClick={handleStart}
-              className={`px-6 py-2 text-lg font-medium text-white rounded-md transition ${
-                isTracking
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700"
-              }`}
+              className={`px-6 py-2 text-lg font-medium text-white rounded-md transition ${isTracking
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+                }`}
               disabled={isTracking}
             >
               Start
             </button>
             <button
               onClick={handleStop}
-              className={`px-6 py-2 text-lg font-medium text-white rounded-md transition ${
-                !isTracking
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-red-600 hover:bg-red-700"
-              }`}
+              className={`px-6 py-2 text-lg font-medium text-white rounded-md transition ${!isTracking
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-700"
+                }`}
               disabled={!isTracking}
             >
               Stop

@@ -19,8 +19,8 @@ function App() {
   const [startTime, setStartTime] = useState(null);
   const [isServerReady, setIsServerReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [progress, setProgress] = useState(0);
 
-  // Helper to format elapsed time
   const formatTime = (timeInSeconds) => {
     const seconds = Math.floor(timeInSeconds);
     const milliseconds = Math.floor((timeInSeconds - seconds) * 1000);
@@ -34,7 +34,6 @@ function App() {
       return;
     }
 
-    // Initialize the Socket.IO connection
     socketRef.current = io(BACKEND_URL, {
       transports: ["websocket"],
       reconnection: true,
@@ -73,7 +72,6 @@ function App() {
       setStatus("Error processing frame");
     });
 
-    // Cleanup on unmount
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -81,16 +79,22 @@ function App() {
     };
   }, []);
 
-  // Simulate EC2 launch wait for 3 seconds (the popup will be exactly as production)
+  // Simulate loading progress
   useEffect(() => {
-    console.log("Simulating backend launch wait (3 seconds)...");
-    const timer = setTimeout(() => {
-      setIsServerReady(true);
-    }, 3000);
-    return () => clearTimeout(timer);
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setTimeout(() => setIsServerReady(true), 500);
+          return 100;
+        }
+        return prev + Math.random() * 10;
+      });
+    }, 300);
+
+    return () => clearInterval(interval);
   }, []);
 
-  // Access the webcam once the server is "ready"
   useEffect(() => {
     if (!isServerReady) return;
 
@@ -107,11 +111,8 @@ function App() {
       });
   }, [isServerReady]);
 
-  // Send frames at intervals when tracking is enabled
   useEffect(() => {
-    if (!isTracking || !socketRef.current || !videoReady) {
-      return;
-    }
+    if (!isTracking || !socketRef.current || !videoReady) return;
 
     const interval = setInterval(() => {
       if (videoRef.current && canvasRef.current) {
@@ -131,7 +132,6 @@ function App() {
     return () => clearInterval(interval);
   }, [isTracking, videoReady]);
 
-  // Timer to update focused/distracted time continuously
   useEffect(() => {
     if (!isTracking || !startTime) return;
 
@@ -163,20 +163,20 @@ function App() {
     setStatus("Click start to begin inferences");
   };
 
-  // Production loading popup (unchanged)
   const LoadingPopup = () => (
     <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
-      <div className="flex space-x-6 items-center p-8 border rounded-lg shadow-xl">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">🚀 Server Loading</h2>
-          <button className="bg-blue-500 text-white px-4 py-2 rounded-lg animate-pulse">
-            Loading...
-          </button>
+      <div className="flex flex-col items-center space-y-6 p-8 border rounded-lg shadow-xl max-w-md w-full">
+        <h2 className="text-3xl font-bold text-blue-700">🚀 Launching Backend</h2>
+        <p className="text-center text-gray-600 text-base">
+          We're loading up the server and getting your webcam ready for real-time distraction detection.
+        </p>
+        <div className="w-full bg-gray-200 rounded-full h-4 shadow-inner">
+          <div
+            className="bg-blue-500 h-4 rounded-full transition-all duration-200 ease-out"
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          ></div>
         </div>
-        <div className="text-gray-700 max-w-sm">
-          <p>This app detects distractions in real-time using your webcam.</p>
-          <p>Please wait a few seconds while we spin up the backend infrastructure.</p>
-        </div>
+        <p className="text-sm text-gray-500">{Math.min(progress, 100).toFixed(0)}%</p>
       </div>
     </div>
   );

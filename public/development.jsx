@@ -151,7 +151,6 @@ function App() {
         }
       } catch (err) {
         console.error("❌ Server failed to launch:", err);
-        // Optionally show a retry UI here
       }
     };
   
